@@ -4,6 +4,7 @@
 #include <ctime>
 #include "SurfDetect.h"
 #include "SurfDescribe.h"
+#include "SurfMatch.h"
 #include "surf_feature.hpp"
 
 bool cmp_surf_point(SurfPoint* s0, SurfPoint* s1) {
@@ -60,58 +61,50 @@ int compute_surf_points(char *data, int height, int width, int max_points, float
   return total_points;
 }
 
-
-int compute_surf_random(char *data, int height, int width, int max_points, float *points) {
-  int total_points = 0;
-  IntegralImage intim(data, height, width);
-  std::list<SurfPoint*> *sp = SurfDetect::allocPoints();
-  // Start Random
-  //int prev = 0;
-  double weight_normalize = 0.;
-  srand(time(NULL));
-  for (int scale = 1; scale < 10000; ++scale) {
-    int bound = 17 * scale + 2;
-    int x_min_bound = bound;
-    int y_min_bound = bound;
-    int x_max_bound = width - bound;
-    int y_max_bound = height - bound;
-    if (x_max_bound <= x_min_bound || y_max_bound <= y_min_bound)
-      break;
-    weight_normalize += (width - 2*bound) * (height - 2*bound) / (double)(scale * scale);
-  }
-  for (int scale = 1; scale < 10000; ++scale) {
-    int bound = 17 * scale + 2;
-    int x_min_bound = bound;
-    int y_min_bound = bound;
-    int x_max_bound = width - bound;
-    int y_max_bound = height - bound;
-    double cur_weight = (width - 2*bound) * (height - 2*bound) / (double)(scale * scale);
-    cur_weight /= weight_normalize;
-    int num_points = cur_weight * max_points;
-    if (x_max_bound <= x_min_bound || y_max_bound <= y_min_bound || !max_points)
-      break;
-    double x_width = (x_max_bound - x_min_bound) / (double)RAND_MAX;
-    double y_width = (y_max_bound - y_min_bound) / (double)RAND_MAX;
-    for (int pt_num = 0; pt_num < num_points; ++pt_num) {
-      int x = rand() * x_width + x_min_bound;
-      int y = rand() * y_width + y_min_bound;
-      //printf("%d [%d,%d)=%d [%d,%d)=%d\n", scale, x_min_bound, x_max_bound, x, y_min_bound, y_max_bound, y);
-      sp->push_front(new SurfPoint(x, y, scale, true, 0));
+void convert_points(std::list<SurfPoint*> *sps, float *features, int *x, int *y, int *scale, float *orientation, char *sign, float *cornerness, int num_points, int is64) {
+    int i;
+    for (i = 0; i < num_points; ++i) {
+        SurfPoint *sp = new SurfPoint(x[i], y[i], scale[i], sign[i], cornerness[i]);
+        sp->index = i;
+        if (features) {
+            if (is64) {
+                sp->features64 = new float[64];
+                memcpy(sp->features64, features, sizeof(float) * 64);
+                features += 64;
+            } else {
+                sp->features128 = new float[128];
+                memcpy(sp->features128, features, sizeof(float) * 128);
+                features += 128;
+            }
+        }
+        sps->push_back(sp);
     }
-    //printf("%d %d %d\n", scale, sp->size(), sp->size() - prev);
-    //prev = sp->size();
+}
+
+int match_surf_points(float *features0, int *x0, int *y0, int *scale0, float *orientation0,
+                      char *sign0, float *cornerness0, int num_points0,
+                      float *features1, int *x1, int *y1, int *scale1, float *orientation1,
+                      char *sign1, float *cornerness1, int num_points1,
+                      int is64, float threshNNRD, float threshNND,
+                      int **out_matches) {
+  std::list<SurfPoint*> *sp0 = SurfDetect::allocPoints();
+  std::list<SurfPoint*> *sp1 = SurfDetect::allocPoints();
+  convert_points(sp0, features0, x0, y0, scale0, orientation0, sign0, cornerness0, num_points0, is64);
+  convert_points(sp1, features1, x1, y1, scale1, orientation1, sign1, cornerness1, num_points1, is64);
+  SurfMatch *sm = new SurfMatch();
+  std::list<MatchPair*> *matchList = SurfMatch::allocMatches();
+  sm->matchNNDR(matchList, sp0, sp1, threshNNRD, threshNND);
+  int num_matches = matchList->size();
+  int *matches = (int *)malloc(sizeof(int) * num_matches * 2); // NOTE: Using malloc so that C code can free it
+  *out_matches = matches;
+  for (list<MatchPair*>::iterator mp = matchList->begin(); mp != matchList->end(); mp++) {
+      matches[0] = (*mp)->spt0->index;
+      matches[1] = (*mp)->spt1->index;
+      matches += 2;
   }
-  // End Random
-  SurfDescribe *sdesc = new SurfDescribe();
-  sdesc->compute(sp, &intim);
-  int feature_bytes = sizeof(float) * 64;
-  for (std::list<SurfPoint*>::iterator iter = sp->begin(); iter != sp->end(); ++iter, ++total_points) {
-    if (total_points >= max_points)
-      break;
-    memcpy(points, (*iter)->features64, feature_bytes);
-    points += 64;
-  }
-  delete sdesc;
-  SurfDetect::freePoints(&sp);
-  return total_points;
+  SurfMatch::freeMatchList(&matchList);
+  SurfDetect::freePoints(&sp0);
+  SurfDetect::freePoints(&sp1);
+  delete sm;
+  return num_matches;
 }

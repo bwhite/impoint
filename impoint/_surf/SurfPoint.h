@@ -17,6 +17,7 @@ public:
 	float cornerness;
 	float *features64;
 	float *features128;
+        int index; // Used for matching, not used internally set by user code
 
 	SurfPoint(const void *data);
 	void write(void *data);

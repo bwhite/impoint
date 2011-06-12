@@ -6,6 +6,7 @@ SurfPoint::SurfPoint(int x, int y, int scale, bool sign, float cornerness) : x(x
 {
 	features64 = 0;
 	features128 = 0;
+        index = 0;
 #ifdef POINT_STATS
 	rank = -1;
 #endif

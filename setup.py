@@ -41,6 +41,7 @@ ext_modules = [Extension("_impoint",
                          ["impoint/_surf/surf" + source_ext,
                           'impoint/_surf/surf_feature.cpp', 'impoint/_surf/SurfDetect.cpp',
                           'impoint/_surf/SurfDescribe.cpp', 'impoint/_surf/SurfPoint.cpp',
+                          'impoint/_surf/SurfMatch.cpp', 'impoint/_surf/MatchPair.cpp',
                           'impoint/_surf/integral_image/IntegralImage.cpp'],
                          extra_compile_args=['-I', np.get_include()],
                          include_dirs=['impoint'])]
