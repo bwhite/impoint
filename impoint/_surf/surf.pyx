@@ -3,6 +3,7 @@ import numpy as np
 cimport numpy as np
 cimport impoint
 import imfeat
+import itertools
 
 cdef extern from "surf_feature.hpp":
     int compute_surf_descriptors(np.uint8_t *data, int height, int width, int max_points, float *points)
@@ -76,10 +77,17 @@ cdef class SURF(impoint.BaseFeaturePoint):
         bound = 17 * scale + 2
         return {'x': [bound, width - bound], 'y': [bound, height - bound]}        
 
-    def compute_dense(self, image_in, point_iter):
+    def compute_dense(self, image_in, point_iter=None):
         global FEAT_ITER, COLLECT_LIST
-        FEAT_ITER = iter(point_iter)
         cdef np.ndarray image = imfeat.convert_image(image_in, [{'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'}])
+        if point_iter is None:  # NOTE(brandyn): This is the default iterator if none is provided
+            iters = []
+            for s in [1, 2, 4, 8, 16]:
+                bounds = self.compute_dense_bounds(image.shape[0], image.shape[1], s)
+                d = max(s * 4, 10)  # Spacing used between points
+                iters.append(itertools.product(np.arange(bounds['x'][0], bounds['x'][1], d), np.arange(bounds['y'][0], bounds['y'][1], d), [s]))
+            point_iter = itertools.chain(*iters)
+        FEAT_ITER = iter(point_iter)
         COLLECT_LIST = []
         compute_descriptors(<np.uint8_t *>image.data, image.shape[0], image.shape[1], &feat_callback, &collect_callback)
         return np.vstack(COLLECT_LIST)
