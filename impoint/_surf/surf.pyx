@@ -33,8 +33,8 @@ FEAT_ITER = None
 cdef int feat_callback(int *x, int *y, int *scale):
     try:
         out = FEAT_ITER.next()
-        x[0] = out[0]
-        y[0] = out[1]
+        x[0] = out[1]
+        y[0] = out[0]
         scale[0] = out[2]
     except StopIteration:
         return 0
@@ -85,12 +85,24 @@ cdef class SURF(impoint.BaseFeaturePoint):
             for s in [1, 2, 4, 8, 16]:
                 bounds = self.compute_dense_bounds(image.shape[0], image.shape[1], s)
                 d = max(s * 4, 10)  # Spacing used between points
-                iters.append(itertools.product(np.arange(bounds['x'][0], bounds['x'][1], d), np.arange(bounds['y'][0], bounds['y'][1], d), [s]))
+                xs, ys = np.arange(bounds['x'][0], bounds['x'][1], d), np.arange(bounds['y'][0], bounds['y'][1], d)
+                iters.append(itertools.product(ys, xs, [s]))
             point_iter = itertools.chain(*iters)
         FEAT_ITER = iter(point_iter)
         COLLECT_LIST = []
         compute_descriptors(<np.uint8_t *>image.data, image.shape[0], image.shape[1], &feat_callback, &collect_callback)
         return np.vstack(COLLECT_LIST)
+
+    def make_feature_mask(self, image, clusters, scale=1):
+        import scipy as sp
+        import scipy.cluster
+        image = imfeat.convert_image(image, [{'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'}])
+        bounds = self.compute_dense_bounds(image.shape[0], image.shape[1], scale)
+        d = max(scale * 4, 10)  # Spacing used between points
+        xs, ys = np.arange(bounds['x'][0], bounds['x'][1], d), np.arange(bounds['y'][0], bounds['y'][1], d)
+        i = itertools.product(ys, xs, [scale])
+        points = self.compute_dense(image, i)
+        return scipy.cluster.vq.vq(points, clusters)[0].reshape((len(ys), len(xs)))
 
     def __call__(self, image_in):
         image_in = imfeat.convert_image(image_in, [('opencv', 'gray', 8)])
