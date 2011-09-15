@@ -61,6 +61,22 @@ int compute_surf_points(char *data, int height, int width, int max_points, float
   return total_points;
 }
 
+void compute_descriptors(char *data, int height, int width, int (*feat_callback)(int *, int *, int *), void (*collect_callback)(float *)) {
+    IntegralImage intim(data, height, width);
+    SurfPoint *sp = new SurfPoint(0, 0, 0, false, 0.);
+    SurfDescribe *sdesc = new SurfDescribe();
+    int x, y, scale;
+    while(feat_callback(&x, &y, &scale)) {
+        sp->x = x;
+        sp->y = y;
+        sp->scale = scale;
+        sdesc->compute(sp, &intim);
+        collect_callback(sp->features64);
+    }
+    delete sdesc;
+    delete sp;
+}
+
 void convert_points(std::list<SurfPoint*> *sps, float *features, int *x, int *y, int *scale, float *orientation, char *sign, float *cornerness, int num_points, int is64) {
     int i;
     for (i = 0; i < num_points; ++i) {

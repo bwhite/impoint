@@ -9,6 +9,7 @@ extern "C" {
                         char *sign1, float *cornerness1, int num_points1,
                         int is64, float threshNNRD, float threshNND,
                         int **out_matches);
+    void compute_descriptors(char *data, int height, int width, int (*feat_callback)(int *, int *, int *), void (*collect_callback)(float *));
 #ifdef __cplusplus
 }
 #endif

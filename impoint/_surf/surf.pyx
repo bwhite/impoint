@@ -15,6 +15,37 @@ cdef extern from "surf_feature.hpp":
                           np.uint8_t *sign1, np.float32_t *cornerness1, int num_points1,
                           int is64, float threshNNRD, float threshNND,
                           np.int32_t **out_matches)
+    void compute_descriptors(np.uint8_t *data, int height, int width, int (*feat_callback)(int *, int *, int *), void (*collect_callback)(float *))
+
+
+cdef extern from "numpy/arrayobject.h":
+    void import_array()
+    cdef object PyArray_SimpleNewFromData(int nd, np.npy_intp *dims,
+                                           int typenum, void *data)
+
+
+import_array()
+
+
+# This nasty use of global variables makes it possible to compute the features iteratively
+FEAT_ITER = None
+cdef int feat_callback(int *x, int *y, int *scale):
+    try:
+        out = FEAT_ITER.next()
+        x[0] = out[0]
+        y[0] = out[1]
+        scale[0] = out[2]
+    except StopIteration:
+        return 0
+    return 1
+
+COLLECT_LIST = None
+cdef np.npy_intp FEAT_DIMS[1]
+FEAT_DIMS[0] = 64
+cdef void collect_callback(float *feature64):
+    global COLLECT_LIST
+    COLLECT_LIST.append(PyArray_SimpleNewFromData(1, FEAT_DIMS, np.NPY_FLOAT32, feature64).copy())
+        
 
 cdef extern from "stdlib.h":
     void free(void *ptr)
@@ -41,6 +72,17 @@ cdef class SURF(impoint.BaseFeaturePoint):
         self.sign = np.ascontiguousarray(np.zeros(max_points, dtype=np.uint8))
         self.cornerness = np.ascontiguousarray(np.zeros(max_points, dtype=np.float32))
 
+    def compute_dense_bounds(self, height, width, scale):
+        bound = 17 * scale + 2
+        return {'x': [bound, width - bound], 'y': [bound, height - bound]}        
+
+    def compute_dense(self, image_in, point_iter):
+        global FEAT_ITER, COLLECT_LIST
+        FEAT_ITER = iter(point_iter)
+        cdef np.ndarray image = imfeat.convert_image(image_in, [{'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'}])
+        COLLECT_LIST = []
+        compute_descriptors(<np.uint8_t *>image.data, image.shape[0], image.shape[1], &feat_callback, &collect_callback)
+        return np.vstack(COLLECT_LIST)
 
     def __call__(self, image_in):
         image_in = imfeat.convert_image(image_in, [('opencv', 'gray', 8)])
@@ -96,7 +138,6 @@ cdef class SURF(impoint.BaseFeaturePoint):
         cdef np.int32_t *out_matches
         descriptor0, x0, y0, scale0, orientation0, sign0, cornerness0 = self._convert_points(points0)
         descriptor1, x1, y1, scale1, orientation1, sign1, cornerness1 = self._convert_points(points1)
-        print('Prematch')
         sz = match_surf_points(<np.float32_t *>descriptor0.data, <np.int32_t *>x0.data, <np.int32_t *>y0.data,
                                <np.int32_t *>scale0.data, <np.float32_t *>orientation0.data, <np.uint8_t *>sign0.data,
                                <np.float32_t *>cornerness0.data, len(points0),
@@ -104,7 +145,6 @@ cdef class SURF(impoint.BaseFeaturePoint):
                                <np.int32_t *>scale1.data, <np.float32_t *>orientation1.data, <np.uint8_t *>sign1.data,
                                <np.float32_t *>cornerness1.data, len(points1),
                                1, self._thresh_nnrd, self._thresh_nnd, &out_matches)
-        print('Post')
         cdef np.ndarray matches = np.ascontiguousarray(np.zeros((sz, 2), dtype=np.int32))
         memcpy(matches.data, out_matches, sz * 4 * 2)
         free(out_matches)

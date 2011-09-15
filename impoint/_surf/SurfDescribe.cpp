@@ -44,6 +44,13 @@ list<SurfPoint*> *SurfDescribe::compute(list<SurfPoint*> *points, IntegralImage 
 	return points;
 }
 
+void SurfDescribe::compute(SurfPoint *pt, IntegralImage *intim)
+{
+	this->intim = intim;
+        computeOrientation(pt);
+        computeDescriptor(pt);
+}
+
 void SurfDescribe::computeOrientation(SurfPoint *pt)
 {
 	// Make a 6s radius grid of sampling step s

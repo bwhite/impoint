@@ -9,6 +9,7 @@ public:
 	SurfDescribe();
 	~SurfDescribe();
 	list<SurfPoint*> *compute(list<SurfPoint*> *points, IntegralImage *intim);
+        void compute(SurfPoint *pt, IntegralImage *intim);
 private:
 	void computeOrientation(SurfPoint *pt);
 	void computeDescriptor(SurfPoint *pt);
