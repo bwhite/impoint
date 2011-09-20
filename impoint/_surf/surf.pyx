@@ -4,6 +4,7 @@ cimport numpy as np
 cimport impoint
 import imfeat
 import itertools
+import distpy
 
 cdef extern from "surf_feature.hpp":
     int compute_surf_descriptors(np.uint8_t *data, int height, int width, int max_points, float *points)
@@ -58,6 +59,7 @@ cdef class SURF(impoint.BaseFeaturePoint):
     cdef int _max_points
     cdef np.ndarray points, x, y, scale, orientation, sign, cornerness
     cdef float _thresh_nnrd, _thresh_nnd
+    cdef object dist
 
     def __init__(self, max_points=10000):
         super(SURF, self).__init__()
@@ -72,6 +74,7 @@ cdef class SURF(impoint.BaseFeaturePoint):
         self.orientation = np.ascontiguousarray(np.zeros(max_points, dtype=np.float32))
         self.sign = np.ascontiguousarray(np.zeros(max_points, dtype=np.uint8))
         self.cornerness = np.ascontiguousarray(np.zeros(max_points, dtype=np.float32))
+        self.dist = distpy.L2Sqr()
 
     def compute_dense_bounds(self, height, width, scale):
         bound = 17 * scale + 2
@@ -102,7 +105,7 @@ cdef class SURF(impoint.BaseFeaturePoint):
         xs, ys = np.arange(bounds['x'][0], bounds['x'][1], d), np.arange(bounds['y'][0], bounds['y'][1], d)
         i = itertools.product(ys, xs, [scale])
         points = self.compute_dense(image, i)
-        return scipy.cluster.vq.vq(points, clusters)[0].reshape((len(ys), len(xs)))
+        return np.ascontiguousarray(self.dist.nns(clusters, np.asfarray(points))[:, 1]).reshape((len(ys), len(xs)))
 
     def __call__(self, image_in):
         image_in = imfeat.convert_image(image_in, [('opencv', 'gray', 8)])
