@@ -82,7 +82,7 @@ cdef class SURF(impoint.BaseFeaturePoint):
 
     def compute_dense(self, image_in, point_iter=None):
         global FEAT_ITER, COLLECT_LIST
-        cdef np.ndarray image = imfeat.convert_image(image_in, [{'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'}])
+        cdef np.ndarray image = imfeat.convert_image(image_in, {'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'})
         if point_iter is None:  # NOTE(brandyn): This is the default iterator if none is provided
             iters = []
             for s in [1, 2, 4, 8, 16]:
@@ -99,7 +99,7 @@ cdef class SURF(impoint.BaseFeaturePoint):
     def make_feature_mask(self, image, clusters, scale=1):
         import scipy as sp
         import scipy.cluster
-        image = imfeat.convert_image(image, [{'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'}])
+        image = imfeat.convert_image(image, {'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'})
         bounds = self.compute_dense_bounds(image.shape[0], image.shape[1], scale)
         d = max(scale * 4, 10)  # Spacing used between points
         xs, ys = np.arange(bounds['x'][0], bounds['x'][1], d), np.arange(bounds['y'][0], bounds['y'][1], d)
@@ -108,8 +108,8 @@ cdef class SURF(impoint.BaseFeaturePoint):
         return np.ascontiguousarray(self.dist.nns(clusters, np.asfarray(points))[:, 1]).reshape((len(ys), len(xs)))
 
     def __call__(self, image_in):
-        image_in = imfeat.convert_image(image_in, [('opencv', 'gray', 8)])
-        cdef np.ndarray image = np.ascontiguousarray(cv.GetMat(image_in), dtype=np.uint8)
+        image_in = imfeat.convert_image(image_in, {'type': 'numpy', 'mode': 'gray', 'dtype': 'uint8'})
+        cdef np.ndarray image = np.ascontiguousarray(image_in)
         cdef int height = image.shape[0]
         cdef int width = image.shape[1]
         max_points = min(self._max_points, height * width)
